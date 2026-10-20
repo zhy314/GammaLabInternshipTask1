@@ -1,45 +1,41 @@
-# 01 - Exploratory Data Analysis
+# 01 - 数据探索（EDA）
 
-## Dataset at a glance
+## 数据概览
 
-| Item | Value |
+| 项目 | 结果 |
 |---|---|
-| Task | Binary classification (`target ∈ {0, 1}`) |
-| Train rows | 156 |
-| Test rows | 84 |
-| Features | 4 numeric (`f1`, `f2`, `f3`, `f4`) |
-| Missing values | 0 in both train and test |
-| Duplicate IDs | 0 |
-| Train/test ID overlap | 0 |
-| Class balance | 1: 86 (55.1%), 0: 70 (44.9%) |
+| 任务类型 | 二分类（`target ∈ {0, 1}`） |
+| 训练集行数 | 156 |
+| 测试集行数 | 84 |
+| 特征 | 4 个数值特征（`f1`、`f2`、`f3`、`f4`） |
+| 缺失值 | 训练集与测试集均为 0 |
+| 重复 ID | 0 |
+| 训练/测试 ID 交集 | 0 |
+| 类别分布 | 正类 1：86（55.1%），负类 0：70（44.9%） |
 
-The features are already roughly standardized (per-column mean ≈ 0, std ≈ 1,
-range ≈ ±3), so additional scaling matters mainly for distance / margin based
-models (kNN, SVM, LogReg) and not for tree ensembles.
+四个特征本身已经近似标准化（各列均值 ≈ 0、标准差 ≈ 1、取值范围约 ±3），
+因此额外的标准化**对距离或间隔类模型（kNN、SVM、LogReg）更重要**，对树集成几乎没有影响。
 
-## Signal per feature (Pearson correlation with `target`)
+## 每个特征与 target 的皮尔逊相关系数
 
-| Feature | Corr |
+| 特征 | 相关系数 |
 |---|---|
-| `f1` | **+0.609** (strong) |
-| `f2` | **+0.454** (moderate) |
-| `f3` | −0.162 (weak) |
-| `f4` | −0.053 (near zero) |
+| `f1` | **+0.609**（强相关） |
+| `f2` | **+0.454**（中等相关） |
+| `f3` | −0.162（弱相关） |
+| `f4` | −0.053（几乎为零） |
 
-Interpretation: `f1` and `f2` carry most of the linear signal, while `f3` and
-`f4` may still contribute through non-linear interactions. We keep all four
-features and let the models decide how to weight them.
+**解读**：`f1` 与 `f2` 承担了几乎全部的线性信号，`f3`、`f4` 可能通过非线性交互
+作用于模型。因此我们保留全部四个特征，让各个模型自行学习权重。
 
-## Modelling implications
+## 对建模的启示
 
-1. **Very small dataset (156 rows)** – prefer models with strong implicit
-   regularization (linear / RBF-SVM / shallow boosted trees). Deep networks or
-   heavy ensembles are expected to overfit. All evaluation uses
-   `StratifiedKFold(n_splits=5, shuffle=True, random_state=42)`.
-2. **Public leaderboard = only part of the hidden test set.** We tune purely
-   with cross-validation on the training set and never probe the leaderboard.
-3. **Standardization only from train statistics** – implemented via
-   `sklearn.pipeline` so no information leaks from CV folds into training.
-4. **Baseline to beat**: `baseline.py` ships a kNN(k=5) model that we treat as
-   the lower bound. Any new submission must beat it on 5-fold CV before being
-   promoted to `submission.csv`.
+1. **样本极少（仅 156 行）**：优先选择带有强正则的模型（线性 / RBF-SVM / 浅层
+   提升树）。深度网络和重型集成在该规模上容易过拟合。所有实验统一使用
+   `StratifiedKFold(n_splits=5, shuffle=True, random_state=42)` 评估。
+2. **公开榜 ≠ 完整测试集**：严禁用公开榜反复试探。所有调参完全依赖训练集上的
+   交叉验证。
+3. **只能使用训练集统计量**：标准化、缺失填补均通过 `sklearn.pipeline` 完成，
+   确保验证折的信息不会泄漏回训练过程。
+4. **要击败的下界**：`baseline.py` 的 kNN(k=5) 作为底线，任何新模型必须在 5 折 CV
+   上稳定超过它，才有资格把结果写入 `submission.csv`。

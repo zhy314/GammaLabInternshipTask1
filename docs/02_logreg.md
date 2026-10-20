@@ -1,39 +1,33 @@
-# 02 - Logistic Regression
+# 02 - Logistic Regression（逻辑回归）
 
-## Why Logistic Regression first
+## 为什么优先尝试逻辑回归
 
-The EDA (see `01_eda.md`) shows that `f1` (ρ ≈ 0.61) and `f2` (ρ ≈ 0.45) carry
-strong *linear* signal with respect to `target`, that the dataset is tiny
-(156 rows) and that features are already roughly standardized. On such a
-dataset a well-regularised linear model is expected to be hard to beat:
+根据 `01_eda.md` 的结论：`f1`（ρ ≈ 0.61）和 `f2`（ρ ≈ 0.45）表现出很强的
+**线性信号**，数据集规模很小（156 行），特征本身也接近标准化。在这种设定下，
+一个带正则的线性模型通常非常难被击败：
 
-* linear boundaries have low variance, which matters when every CV fold has
-  only ~31 held-out samples;
-* `L2` penalty acts as a tunable bias/variance knob (`C` = 1/λ);
-* a small polynomial expansion (`degree=2`) lets us test whether a
-  slightly non-linear boundary improves the fit without jumping to a full
-  non-parametric model.
+* **线性边界方差低**：每一折验证只有约 31 个样本，模型稳定性比表达力更重要；
+* **L2 正则项**提供一个清晰的偏差/方差旋钮（`C = 1/λ`）；
+* 加一层较低阶的 **多项式扩展（degree=2）** 可以判断：是否存在轻度非线性
+  边界，而不必立刻跳到完全非参数模型。
 
-The model is wrapped in a `Pipeline(StandardScaler, [PolynomialFeatures,
-StandardScaler], LogisticRegression)` so that scaling is fitted inside each
-CV fold — no leakage from validation data.
+模型封装为 `Pipeline(StandardScaler, [PolynomialFeatures, StandardScaler], LogisticRegression)`，
+以保证每一折**都只在训练部分**上拟合标准化参数，不会泄漏验证数据的信息。
 
-## Grid search
+## 网格搜索
 
-Evaluation protocol: `StratifiedKFold(n_splits=5, shuffle=True,
-random_state=42)` on the training set, scoring = accuracy. Reference baseline
-`kNN(k=5)` was re-run under the same CV: **0.8268 ± 0.0635**.
+评估协议：`StratifiedKFold(n_splits=5, shuffle=True, random_state=42)`，指标为
+accuracy。同一协议下重新测得的基线 `kNN(k=5)` 为 **0.8268 ± 0.0635**。
 
-| Hyper-parameter | Values tried | Rationale |
+| 超参数 | 取值 | 设置理由 |
 |---|---|---|
-| `poly` (degree of `PolynomialFeatures`) | 1, 2, 3 | 1 = pure linear; 2 picks up pairwise interactions and squared terms; 3 checks whether more flexibility helps or just overfits. |
-| `penalty` | `l2`, `l1` | `l2` is the standard safe choice; `l1` adds feature selection in case `f3`/`f4` are pure noise. |
-| `C` (inverse regularization strength) | 0.01, 0.1, 0.5, 1, 2, 5, 10, 100 | Spans heavy regularization to almost unregularized across 4 orders of magnitude. |
+| `poly`（`PolynomialFeatures` 的阶数） | 1, 2, 3 | 1 = 纯线性；2 = 加入两两交互与平方项；3 = 考察更高灵活度是否带来提升还是过拟合。 |
+| `penalty` | `l2`, `l1` | `l2` 是标准安全选择；`l1` 自带特征选择，可验证 `f3`/`f4` 是否纯噪声。 |
+| `C`（正则强度的倒数） | 0.01, 0.1, 0.5, 1, 2, 5, 10, 100 | 覆盖从强正则到几乎无正则共 4 个数量级。 |
 
-Top rows of the grid (full table saved as
-`experiments/exp01_logreg_grid.csv`):
+网格 Top 结果（完整表格见 `experiments/exp01_logreg_grid.csv`）：
 
-| poly | penalty | C | CV mean | CV std |
+| poly | penalty | C | CV 均值 | CV 标准差 |
 |---:|:---:|---:|---:|---:|
 | **2** | **l2** | **1.0** | **0.9296** | **0.0235** |
 | 1 | l2 | 0.1 | 0.9169 | 0.0475 |
@@ -41,7 +35,7 @@ Top rows of the grid (full table saved as
 | 1 | l2 | 0.5 | 0.9167 | 0.0436 |
 | 1 | l2 | 10 | 0.9167 | 0.0327 |
 
-## Chosen configuration
+## 最终选用配置
 
 ```
 StandardScaler
@@ -50,19 +44,17 @@ StandardScaler
 LogisticRegression(penalty='l2', C=1.0, solver='lbfgs', max_iter=5000)
 ```
 
-* **5-fold CV accuracy:** **0.9296 ± 0.0235**
-* **Gain over baseline kNN(5):** +10.28 points (and much lower variance).
-* **Observations:**
-  * Degree 3 did not improve further and started inflating variance — a sign
-    that quadratic interactions already capture the true boundary.
-  * `l1` and `l2` were tied for most `C` values, suggesting the four features
-    all contribute at least weakly; nothing is reliably zeroed out.
-  * The model is extremely stable (std ≈ 0.024) which is important when the
-    public leaderboard uses only part of the hidden test set.
+* **5 折 CV accuracy**：**0.9296 ± 0.0235**
+* **相对基线 kNN(5) 提升**：+10.28 个点，且方差显著更小。
+* **观察**：
+  * `degree=3` 没有继续提升，反而让方差变大——说明二次项已经捕捉到了真实边界。
+  * `l1` 与 `l2` 在大多数 `C` 上基本持平，说明四个特征都至少有些微贡献，没有
+    任何一个被稳定地置零。
+  * 模型非常稳定（std ≈ 0.024），这在公开榜只采样部分测试集的情况下尤为重要。
 
-## Deliverables
+## 产出文件
 
-* Script: `experiments/exp01_logreg.py`
-* Grid CSV: `experiments/exp01_logreg_grid.csv`
-* Submission: `submissions/submission_logreg.csv` (also mirrored to
-  `submission.csv` as the current best).
+* 脚本：`experiments/exp01_logreg.py`
+* 完整网格：`experiments/exp01_logreg_grid.csv`
+* 预测提交：`submissions/submission_logreg.csv`（并镜像到仓库根 `submission.csv`
+  作为当前最佳）。

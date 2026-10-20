@@ -1,69 +1,61 @@
-# 05 - Ensemble (voting + stacking)
+# 05 - 模型融合（Voting + Stacking）
 
-## Why ensemble
+## 为什么做融合
 
-The three previously tuned models encode different inductive biases:
+前面三个已经调好的模型拥有不同的归纳偏置：
 
-* **LogReg (poly=2, L2, C=1)** – smooth quadratic linear boundary.
-* **SVM (linear, C=10)** – max-margin linear boundary.
-* **GBDT (sklearn GB, 400 trees, depth=4, lr=0.03)** – piecewise constant,
-  interaction-aware.
+* **LogReg（poly=2，L2，C=1）** —— 平滑的二次线性边界；
+* **SVM（线性核，C=10）** —— 最大间隔线性边界；
+* **GBDT（sklearn-GB，400 棵、depth=4、lr=0.03）** —— 分段常值、善于捕捉交互。
 
-When base models err on *different* samples, averaging / voting their outputs
-reduces the variance of the combined classifier. With only 156 training rows,
-variance reduction is often more valuable than squeezing out a slightly
-better single-model score.
+当各个基模型**在不同样本上犯错**时，对它们的输出进行平均或投票可以降低总体
+方差。156 行数据上，**方差下降**往往比单模型得分再抠一两点更有价值。
 
-## Strategies compared
+## 对比的融合策略
 
-Protocol: `StratifiedKFold(5, shuffle=True, random_state=42)` on the training
-set, same as every other experiment.
+评估协议：`StratifiedKFold(5, shuffle=True, random_state=42)`，与其他实验一致。
 
-| Strategy | 5-fold CV mean | CV std |
+| 策略 | 5 折 CV 均值 | CV 标准差 |
 |---|---:|---:|
-| **Hard majority vote (LogReg + SVM + GBDT)** | **0.9363** | 0.0445 |
-| Soft vote weights (1, 0, 0) – LogReg only | 0.9296 | 0.0235 |
-| Soft vote weights (3, 1, 1) | 0.9236 | 0.0548 |
-| Soft vote weights (3, 2, 1) | 0.9234 | 0.0377 |
-| Soft vote weights (2, 1, 1) | 0.9171 | 0.0585 |
-| Stacking (meta=LogReg, passthrough=True) | 0.9169 | 0.0429 |
-| Soft vote weights (2, 2, 1) | 0.9169 | 0.0429 |
-| Stacking (meta=LogReg, passthrough=False) | 0.9042 | 0.0442 |
-| Soft vote weights (1, 1, 1) | 0.8978 | 0.0505 |
+| **硬投票（LogReg + SVM + GBDT）** | **0.9363** | 0.0445 |
+| 软投票 权重 (1, 0, 0)（即纯 LogReg） | 0.9296 | 0.0235 |
+| 软投票 权重 (3, 1, 1) | 0.9236 | 0.0548 |
+| 软投票 权重 (3, 2, 1) | 0.9234 | 0.0377 |
+| 软投票 权重 (2, 1, 1) | 0.9171 | 0.0585 |
+| Stacking（meta=LogReg，passthrough=True） | 0.9169 | 0.0429 |
+| 软投票 权重 (2, 2, 1) | 0.9169 | 0.0429 |
+| Stacking（meta=LogReg，passthrough=False） | 0.9042 | 0.0442 |
+| 软投票 权重 (1, 1, 1) | 0.8978 | 0.0505 |
 
-Full table: `experiments/exp04_ensemble_grid.csv`.
+完整表格：`experiments/exp04_ensemble_grid.csv`。
 
-## Observations
+## 现象分析
 
-* **Hard voting wins** because the three base learners disagree on different
-  samples. When at least two of them get a point right, the majority rule
-  recovers it, even on inputs where LogReg alone fails.
-* **Soft voting underperforms hard voting** here. GBDT emits poorly
-  calibrated probabilities (its CV mean is only 0.898), so averaging in its
-  high-confidence wrong probabilities actively hurts.
-* **Stacking** is slightly worse than the LogReg baseline because the meta
-  model has very little data (156 fold-OOF rows) to learn weights from and
-  can itself overfit.
-* **Variance trade-off**: hard voting pays ~2× the std of pure LogReg
-  (0.0445 vs 0.0235). The mean gain (+0.7 pt) is real but small; on the
-  hidden test set the single LogReg model could still beat it on a given
-  draw. We follow the project rules — pick the best CV mean — and promote
-  the hard-vote ensemble to `submission.csv`, but keep the LogReg submission
-  in `submissions/submission_logreg.csv` as a safety net.
+* **硬投票胜出**：三个基模型在不同样本上犯错，只要其中两个判断正确，多数票
+  即可挽救；这正是硬投票比单一模型更稳的根源。
+* **软投票反而弱于硬投票**：GBDT 的概率校准较差（其 CV 均值仅 0.898），
+  将其高置信但错误的概率平均进来会"主动"拖累结果。
+* **Stacking 略低于 LogReg**：元学习器只拿到 156 行 OOF 预测作为训练数据，
+  自身也容易过拟合。
+* **方差权衡**：硬投票的 std ≈ 0.0445，大约是纯 LogReg（0.0235）的 2 倍。
+  均值上的提升（+0.7 pt）真实但较小，在某一次隐藏测试集抽样上，单一 LogReg
+  也完全可能反超。我们遵循项目规则——**以 CV 均值最优为准**——将硬投票结果
+  提升为 `submission.csv`，同时保留 `submissions/submission_logreg.csv` 作为
+  备用安全网。
 
-## Final leaderboard (internal, by 5-fold CV)
+## 最终内部排行榜（按 5 折 CV）
 
-| Rank | Model | CV mean | CV std |
+| 排名 | 模型 | CV 均值 | CV 标准差 |
 |:---:|---|---:|---:|
-| 1 | **Hard-vote (LogReg + SVM + GBDT)** | **0.9363** | 0.0445 |
-| 2 | LogReg (poly=2, L2, C=1)           | 0.9296 | 0.0235 |
-| 3 | SVM (linear, C=10)                 | 0.9234 | 0.0516 |
-| 4 | GBDT (sklearn GB)                  | 0.8982 | 0.0694 |
-| 5 | Baseline kNN(k=5)                  | 0.8268 | 0.0635 |
+| 1 | **硬投票（LogReg + SVM + GBDT）** | **0.9363** | 0.0445 |
+| 2 | LogReg（poly=2，L2，C=1）         | 0.9296 | 0.0235 |
+| 3 | SVM（线性核，C=10）                | 0.9234 | 0.0516 |
+| 4 | GBDT（sklearn GB）                 | 0.8982 | 0.0694 |
+| 5 | 基线 kNN(k=5)                      | 0.8268 | 0.0635 |
 
-## Deliverables
+## 产出文件
 
-* Script: `experiments/exp04_ensemble.py`
-* Grid CSV: `experiments/exp04_ensemble_grid.csv`
-* Submission: `submissions/submission_ensemble.csv` (promoted to
-  `submission.csv`).
+* 脚本：`experiments/exp04_ensemble.py`
+* 完整网格：`experiments/exp04_ensemble_grid.csv`
+* 预测提交：`submissions/submission_ensemble.csv`（已提升为仓库根
+  `submission.csv`）。
