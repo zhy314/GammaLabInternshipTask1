@@ -2,8 +2,9 @@
 import csv,math,collections
 from pathlib import Path
 ROOT=Path(__file__).resolve().parent
-with open(ROOT/'train.csv',encoding='utf-8-sig') as f:train=list(csv.DictReader(f))
-with open(ROOT/'test.csv',encoding='utf-8-sig') as f:test=list(csv.DictReader(f))
+DATA=ROOT/'data' if (ROOT/'data'/'train.csv').exists() else ROOT
+with open(DATA/'train.csv',encoding='utf-8-sig') as f:train=list(csv.DictReader(f))
+with open(DATA/'test.csv',encoding='utf-8-sig') as f:test=list(csv.DictReader(f))
 FEATURES=['f1', 'f2', 'f3', 'f4']
 REGRESSION=False
 # 只用训练集估计缺失值填补与标准化参数。
