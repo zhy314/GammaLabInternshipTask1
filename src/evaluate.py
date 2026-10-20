@@ -33,8 +33,14 @@ def grid_report(name: str, results: Iterable[Dict[str, Any]]) -> pd.DataFrame:
     return df
 
 
-def make_submission(estimator, filename: str, *, retrain: bool = True) -> Path:
-    """Fit on the full training set and write ``submissions/<filename>``."""
+def make_submission(estimator, filename: str, *,
+                    retrain: bool = True, mirror_as_best: bool = False) -> Path:
+    """Fit on the full training set and write ``submissions/<filename>``.
+
+    Set ``mirror_as_best=True`` only when the caller has verified the model is
+    the current CV champion (we don't want a weaker model to overwrite
+    ``submission.csv`` at the repo root).
+    """
     train, test = load_data()
     X, y = xy(train)
     if retrain:
@@ -43,7 +49,9 @@ def make_submission(estimator, filename: str, *, retrain: bool = True) -> Path:
     out = pd.DataFrame({ID: test[ID].values, "prediction": preds})
     path = SUBMISSIONS_DIR / filename
     out.to_csv(path, index=False)
-    # Mirror the latest/best to repo root for one-click submission.
-    out.to_csv(ROOT / "submission.csv", index=False)
-    print(f"wrote {path} (also mirrored to submission.csv)")
+    msg = f"wrote {path}"
+    if mirror_as_best:
+        out.to_csv(ROOT / "submission.csv", index=False)
+        msg += " (mirrored to submission.csv as current best)"
+    print(msg)
     return path

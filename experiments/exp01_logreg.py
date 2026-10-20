@@ -66,7 +66,8 @@ def main() -> None:
           f"C={best.C} -> {best['mean']:.4f} +/- {best['std']:.4f}")
 
     best_est = build(int(best.poly), float(best.C), best.penalty)
-    make_submission(best_est, "submission_logreg.csv")
+    # LogReg is currently the CV champion -> mirror to submission.csv.
+    make_submission(best_est, "submission_logreg.csv", mirror_as_best=True)
 
     # Persist the grid for the doc.
     df.to_csv(ROOT / "experiments" / "exp01_logreg_grid.csv", index=False)
